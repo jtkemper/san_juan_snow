@@ -3,6 +3,8 @@ title: "Web Scraping"
 author: "Matthew Ross"
 date: "10/20/2019"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -10,6 +12,7 @@ library(rvest)
 library(tidyverse)
 library(lubridate)
 library(readxl)
+library(pdftools)
 
 ```
 
@@ -149,6 +152,12 @@ the `SASP forcing` and `SBSP_forcing` meteoroligical datasets.
 
 ```{r}
 
+links_met <- webpage %>%
+  html_nodes('a') %>%
+  .[grepl('forcing',.)] %>%
+  html_attr('href')
+
+links_met
 ```
 
 ## Download the meteorological data
@@ -159,6 +168,29 @@ You can use a for loop or a map function.
 
 ```{r}
 
+###split file names along /
+splits_met <- str_split_fixed(links_met,'/',5)
+splits_met
+
+###split file names along -
+splits_met <- str_split_fixed(splits_met[,5], "-", 4)
+splits_met
+
+###Keep only 3rd column of split along / and -
+dataset_met <- splits_met[, 3]
+dataset_met
+
+
+###Create files
+file_names_met <- paste0("data/", dataset_met, "_metdata")
+file_names_met
+
+
+###Read in and store data
+map2(links_met,file_names_met,download.file)
+
+
+
 ```
 
 ## Read in the data
@@ -168,6 +200,45 @@ column to the data.
 
 ```{r}
 
+###Read in met data
+met_files <- file_names_met %>%
+  .[grepl('_metdata',.)] 
+
+met_file1 <- read_delim(met_files[1], delim = " ", col_names = FALSE)
+
+met_metadata <- webpage %>%
+  html_nodes('a') %>%
+  .[grepl('Read Me',.)] %>%
+  html_attr('href')
+
+met_metadata_text <- pdf_text(met_metadata) %>%
+  readr::read_lines() %>%
+  .[1:26] %>%
+  trimws() %>%
+  str_split_fixed(., "\\.", 2) %>%
+  .[,2] %>%
+  trimws()
+  
+met_metadata_text
+
+colnames(met_file1) <- met_metadata_text
+
+met_file1
+
+
+
+
+
+met_read <- function(file) {
+  df <- read_delim(file, delim = "\t")
+  
+  
+}
+
+met_files_full <- map_dfr(met_files, met_read)
+
+
+summary(met_files_full)
 ```
 
 
