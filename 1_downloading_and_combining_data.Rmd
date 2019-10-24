@@ -157,7 +157,7 @@ links_met <- webpage %>%
   .[grepl('forcing',.)] %>%
   html_attr('href')
 
-links_met
+
 ```
 
 ## Download the meteorological data
@@ -172,22 +172,14 @@ You can use a for loop or a map function.
 splits_met <- str_split_fixed(links_met,'/',5)
 splits_met
 
-###split file names along -
-splits_met <- str_split_fixed(splits_met[,5], "-", 4)
-splits_met
-
-###Keep only 3rd column of split along / and -
-dataset_met <- splits_met[, 3]
-dataset_met
-
-
-###Create files
-file_names_met <- paste0("data/", dataset_met, "_metdata")
+###split file names along 
+file_names_met <- splits_met[,5]
 file_names_met
 
 
 ###Read in and store data
 map2(links_met,file_names_met,download.file)
+
 
 
 
@@ -200,17 +192,13 @@ column to the data.
 
 ```{r}
 
-###Read in met data
-met_files <- file_names_met %>%
-  .[grepl('_metdata',.)] 
-
-met_file1 <- read_delim(met_files[1], delim = " ", col_names = FALSE)
-
+###Read in metadata
 met_metadata <- webpage %>%
   html_nodes('a') %>%
   .[grepl('Read Me',.)] %>%
   html_attr('href')
 
+###Get variable names from metadata in character form to rename headers within met data files
 met_metadata_text <- pdf_text(met_metadata) %>%
   readr::read_lines() %>%
   .[1:26] %>%
@@ -218,27 +206,32 @@ met_metadata_text <- pdf_text(met_metadata) %>%
   str_split_fixed(., "\\.", 2) %>%
   .[,2] %>%
   trimws()
+
+
+our_met_reader <- function(file) {
+
+  ####Extract sitename from filename
+  splits_met <- str_split_fixed(file, "-", 4)
+  splits_met
+  site_name <- splits_met[, 3]
   
-met_metadata_text
-
-colnames(met_file1) <- met_metadata_text
-
-met_file1
-
-
-
-
-
-met_read <- function(file) {
-  df <- read_delim(file, delim = "\t")
+  ###Read in file
+  df <- read_delim(file, delim = " ", col_names = FALSE,
+                 col_types = cols(.default = "n"))
+  
+  ###Rename columns with var names from metadata
+  names(df) <- met_metadata_text
+  
+  ###Append sitename and remove minutes and seconds (all zeros)
+  df %>%
+  select(-c("minute", "second")) %>%
+  mutate(Site = site_name) %>%
+  select(25, 1:24)
   
   
 }
 
-met_files_full <- map_dfr(met_files, met_read)
 
-
-summary(met_files_full)
 ```
 
 
@@ -246,6 +239,11 @@ Use the `map` function to read in both meteorological files.
 
 ```{r}
 
+###Read in files using custom reader function 
+met_files_full <- map_dfr(file_names_met, our_met_reader)
+
+
+summary(met_files_full)
 ```
 
 
